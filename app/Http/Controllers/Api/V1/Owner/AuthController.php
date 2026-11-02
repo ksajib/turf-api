@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Owner;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\AuthenticationTokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -13,13 +14,13 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function login(Request $request, AuditLogger $auditLogger)
+    public function login(Request $request, AuditLogger $auditLogger, AuthenticationTokenService $tokenService)
     {
         $credentials = $request->validate(['login' => ['required', 'string', 'max:255'], 'password' => ['required', 'string']]);
         $identifier = Str::lower(trim($credentials['login']));
         $owner = filter_var($identifier, FILTER_VALIDATE_EMAIL)
-            ? User::whereRaw('LOWER(email) = ?', [$identifier])->first()
-            : User::where('username', $identifier)->first();
+            ? User::whereRaw('LOWER(email) = ?', [$identifier])->where(function ($query): void { $query->where('role', 'business-owner')->orWhereNull('role'); })->first()
+            : User::where('username', $identifier)->where(function ($query): void { $query->where('role', 'business-owner')->orWhereNull('role'); })->first();
 
         if (! $owner || ! Hash::check($credentials['password'], $owner->password)) {
             $auditLogger->record('owner.login.failed', request: $request, metadata: ['identifier' => $identifier]);
@@ -34,7 +35,18 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $auditLogger->record('owner.login.succeeded', $owner, $request, ['requires_password_change' => $owner->must_change_password]);
 
-        return response()->json(['data' => $this->profile($owner)]);
+        return $tokenService->addCookies(response()->json(['data' => $this->profile($owner), 'message' => 'Owner login successful.']), $tokenService->issue($owner));
+    }
+
+    public function refresh(Request $request, AuthenticationTokenService $tokenService)
+    {
+        $result = $tokenService->refreshFromCookie($request->cookie(AuthenticationTokenService::REFRESH_COOKIE));
+        if (! $result || ! ($result['user'] instanceof User)) {
+            return $tokenService->forgetCookies(response()->json(['message' => 'Your refresh session is invalid or expired.', 'code' => 'AUTH_REFRESH_INVALID'], 401));
+        }
+
+        Auth::guard('web')->login($result['user']);
+        return $tokenService->addCookies(response()->json(['data' => $this->profile($result['user']), 'message' => 'Session refreshed successfully.']), $result['tokens']);
     }
 
     public function me(Request $request)
@@ -75,7 +87,8 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
         $auditLogger->record('owner.logout', $owner, $request);
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        app(AuthenticationTokenService::class)->revokeFromRequest($request->cookie(AuthenticationTokenService::ACCESS_COOKIE), $request->cookie(AuthenticationTokenService::REFRESH_COOKIE));
+        return app(AuthenticationTokenService::class)->forgetCookies(response()->json(['message' => 'Owner logout successful.']));
     }
 
     private function profile(User $owner): array

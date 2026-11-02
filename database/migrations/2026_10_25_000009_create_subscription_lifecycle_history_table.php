@@ -12,7 +12,7 @@ return new class extends Migration {
             $table->foreignUlid('business_subscription_id')->constrained('business_subscriptions')->cascadeOnDelete();
             $table->string('status', 20);
             $table->string('action', 50);
-            $table->foreignUlid('platform_admin_id')->nullable()->constrained('platform_admins')->nullOnDelete();
+            $table->foreignUlid('platform_admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestampTz('starts_at')->nullable();
             $table->timestampTz('expires_at')->nullable();
             $table->json('metadata')->nullable();

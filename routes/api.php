@@ -11,16 +11,18 @@ use Illuminate\Support\Facades\Route;
 Route::get('v1/health', fn () => response()->json(['status' => 'ok']))->name('api.v1.health');
 
 Route::prefix('v1/auth')->group(function () {
-    Route::post('login', [UnifiedAuthController::class, 'login'])->middleware('throttle:unified-login');
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::post('login', [UnifiedAuthController::class, 'login']);
+    Route::post('refresh', [UnifiedAuthController::class, 'refresh']);
+    Route::middleware('api.token')->group(function () {
         Route::get('me', [UnifiedAuthController::class, 'me']);
         Route::post('logout', [UnifiedAuthController::class, 'logout']);
     });
 });
 
 Route::prefix('v1/owner/auth')->group(function () {
-    Route::post('login', [OwnerAuthController::class, 'login'])->middleware('throttle:owner-login');
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::post('login', [OwnerAuthController::class, 'login']);
+    Route::post('refresh', [OwnerAuthController::class, 'refresh']);
+    Route::middleware('api.token')->group(function () {
         Route::get('me', [OwnerAuthController::class, 'me']);
         Route::post('password', [OwnerAuthController::class, 'changePassword']);
         Route::post('logout', [OwnerAuthController::class, 'logout']);
@@ -29,14 +31,15 @@ Route::prefix('v1/owner/auth')->group(function () {
 });
 
 Route::prefix('v1/admin/auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:admin-login');
-    Route::middleware(['auth:sanctum', 'platform.admin'])->group(function () {
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('refresh', [AuthController::class, 'refresh']);
+    Route::middleware(['api.token', 'platform.admin'])->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::prefix('v1/admin')->middleware(['auth:sanctum', 'platform.admin'])->group(function () {
+Route::prefix('v1/admin')->middleware(['api.token', 'platform.admin'])->group(function () {
     Route::get('subscription-plans/published', [BusinessSubscriptionController::class, 'plans']);
     Route::get('subscription-payments/pending', [BusinessSubscriptionController::class, 'pendingPayments']);
     Route::post('subscription-payments/{payment}/verify', [BusinessSubscriptionController::class, 'verify']);

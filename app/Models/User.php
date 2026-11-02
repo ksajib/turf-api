@@ -13,7 +13,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'username', 'email', 'phone', 'password', 'must_change_password', 'temporary_password_expires_at', 'password_changed_at'])]
+#[Fillable(['business_id', 'role_id', 'role', 'permissions', 'name', 'username', 'email', 'phone', 'password', 'status', 'token_reference', 'must_change_password', 'temporary_password_expires_at', 'password_changed_at', 'last_login_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -38,7 +38,26 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'temporary_password_expires_at' => 'datetime',
             'password_changed_at' => 'datetime',
+            'last_login_at' => 'datetime',
+            'permissions' => 'array',
         ];
+    }
+
+    public function roleRecord()
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role || $this->roleRecord?->name === $role;
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        $permissions = $this->permissions ?: $this->roleRecord?->permissions ?: [];
+        return in_array($permission, $permissions, true)
+            || (is_array($permissions) && in_array(strtok($permission, '.'), $permissions, true));
     }
 
     protected function username(): Attribute

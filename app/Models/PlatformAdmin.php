@@ -13,19 +13,30 @@ class PlatformAdmin extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUlids, Notifiable;
 
-    protected $table = 'platform_admins';
+    protected $table = 'users';
 
-    protected $fillable = ['name', 'username', 'email', 'password', 'is_active'];
+    protected $fillable = ['business_id', 'role_id', 'permissions', 'name', 'username', 'email', 'password', 'role', 'status', 'token_reference', 'is_active'];
 
     protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'permissions' => 'array',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    protected function getIsActiveAttribute(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    protected function setIsActiveAttribute(bool $value): void
+    {
+        $this->attributes['status'] = $value ? 'active' : 'inactive';
+        $this->attributes['role'] ??= 'platform-admin';
     }
 
     protected function username(): Attribute

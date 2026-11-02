@@ -9,6 +9,7 @@ use App\Models\CredentialDelivery;
 use App\Models\ManualSubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Models\Role;
 use App\Services\AuditLogger;
 use App\Services\OwnerCredentialDelivery;
 use App\Services\OwnerTemporaryPasswordGenerator;
@@ -116,6 +117,7 @@ class BusinessController extends Controller
                 'temporary_password_expires_at' => now()->addDay(),
             ]);
             $business = Business::create(array_merge($data, ['logo_path' => $logoPath, 'status' => Business::STATUS_PENDING]));
+            $owner->forceFill(['business_id' => $business->id, 'role' => 'business-owner', 'role_id' => Role::where('name', 'business-owner')->whereNull('business_id')->value('id'), 'status' => 'active'])->save();
             $business->owners()->attach($owner->id, ['id' => (string) Str::ulid()]);
             app(OwnerCredentialDelivery::class)->queue($owner, $business, $temporaryPassword, $credentialGeneration);
             $auditLogger->record('admin.business.created', $request->user(), $request, [

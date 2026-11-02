@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\PlatformAdmin;
+use App\Models\Role;
 use Illuminate\Console\Command;
 
 class CreatePlatformAdmin extends Command
@@ -23,14 +24,14 @@ class CreatePlatformAdmin extends Command
             return self::FAILURE;
         }
 
-        $admin = PlatformAdmin::create(['name' => $name, 'email' => $email, 'password' => $password, 'is_active' => true]);
+        $admin = PlatformAdmin::create(['name' => $name, 'email' => $email, 'password' => $password, 'role' => 'platform-admin', 'role_id' => Role::where('name', 'platform-admin')->whereNull('business_id')->value('id'), 'status' => 'active']);
         $this->info("Platform administrator {$admin->email} created.");
         return self::SUCCESS;
     }
 
     private function validateInput(string $name, string $email): void
     {
-        if ($name === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL) || PlatformAdmin::where('email', $email)->exists()) {
+        if ($name === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL) || PlatformAdmin::where('email', $email)->where('role', 'platform-admin')->exists()) {
             throw new \InvalidArgumentException('Name/email is invalid or the email is already registered.');
         }
     }

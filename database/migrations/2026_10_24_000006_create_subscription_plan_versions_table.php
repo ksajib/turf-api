@@ -20,7 +20,7 @@ return new class extends Migration {
             $table->unsignedInteger('max_turfs')->nullable();
             $table->unsignedInteger('max_branches')->nullable();
             $table->unsignedInteger('max_staff')->nullable();
-            $table->foreignUlid('published_by_platform_admin_id')->nullable()->constrained('platform_admins')->nullOnDelete();
+            $table->foreignUlid('published_by_platform_admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('published_at');
             $table->timestamps();
             $table->unique(['subscription_plan_id', 'version']);

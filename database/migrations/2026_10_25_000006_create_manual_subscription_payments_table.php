@@ -18,8 +18,8 @@ return new class extends Migration {
             $table->string('transaction_reference', 160);
             $table->timestampTz('payment_date');
             $table->string('status', 30)->default('pending_verification')->index();
-            $table->foreignUlid('recorded_by_platform_admin_id')->constrained('platform_admins');
-            $table->foreignUlid('verified_by_platform_admin_id')->nullable()->constrained('platform_admins')->nullOnDelete();
+            $table->foreignUlid('recorded_by_platform_admin_id')->constrained('users');
+            $table->foreignUlid('verified_by_platform_admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestampTz('verification_at')->nullable();
             $table->string('rejection_reason', 1000)->nullable();
             $table->timestampsTz();

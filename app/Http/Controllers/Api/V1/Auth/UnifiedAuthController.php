@@ -6,16 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\PlatformAdmin;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\AuthenticationTokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class UnifiedAuthController extends Controller
 {
-    public function login(Request $request, AuditLogger $auditLogger)
+    public function login(Request $request, AuditLogger $auditLogger, AuthenticationTokenService $tokenService)
     {
         $credentials = $request->validate([
             'login' => ['required', 'string', 'max:255'],
@@ -23,30 +23,21 @@ class UnifiedAuthController extends Controller
         ]);
 
         $identifier = Str::lower(trim($credentials['login']));
-        $key = 'unified-login:'.$identifier.'|'.$request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            $auditLogger->record('auth.login.rate_limited', request: $request);
-            throw ValidationException::withMessages(['login' => 'Unable to sign in with the provided credentials.']);
-        }
-
         $admins = $this->matchingAdmins($identifier);
         $owners = $this->matchingOwners($identifier);
         if ($admins->count() + $owners->count() !== 1) {
-            RateLimiter::hit($key, 60);
             $auditLogger->record('auth.login.failed', request: $request, metadata: ['reason' => 'invalid_or_ambiguous_identifier']);
             throw ValidationException::withMessages(['login' => 'Unable to sign in with the provided credentials.']);
         }
 
         $identity = $admins->first() ?? $owners->first();
         if (! Hash::check($credentials['password'], $identity->password)) {
-            RateLimiter::hit($key, 60);
             $auditLogger->record('auth.login.failed', request: $request, metadata: ['reason' => 'invalid_credentials']);
             throw ValidationException::withMessages(['login' => 'Unable to sign in with the provided credentials.']);
         }
 
         if ($identity instanceof PlatformAdmin) {
             if (! $identity->is_active) {
-                RateLimiter::hit($key, 60);
                 $auditLogger->record('auth.login.inactive', $identity, $request);
                 throw ValidationException::withMessages(['login' => 'Unable to sign in with the provided credentials.']);
             }
@@ -56,14 +47,13 @@ class UnifiedAuthController extends Controller
             $destination = '/admin';
         } else {
             if ($identity->must_change_password && $identity->temporary_password_expires_at?->isPast()) {
-                RateLimiter::hit($key, 60);
                 $auditLogger->record('auth.login.expired_temporary_password', request: $request, metadata: ['user_id' => $identity->id]);
                 throw ValidationException::withMessages(['login' => 'Unable to sign in with the provided credentials.']);
             }
 
-            $role = 'business-owner';
+            $role = $identity->role ?: 'business-owner';
             $requiresPasswordChange = $identity->must_change_password;
-            $destination = $requiresPasswordChange ? '/owner/change-password' : '/owner';
+            $destination = $requiresPasswordChange ? '/owner/change-password' : ($role === 'customer' ? '/dashboard' : '/owner');
         }
 
         Auth::guard('platform_admin')->logout();
@@ -74,7 +64,6 @@ class UnifiedAuthController extends Controller
             Auth::guard('web')->login($identity);
         }
         $request->session()->regenerate();
-        RateLimiter::clear($key);
 
         if ($identity instanceof PlatformAdmin) {
             $identity->forceFill(['last_login_at' => now()])->save();
@@ -82,14 +71,23 @@ class UnifiedAuthController extends Controller
 
         $auditLogger->record('auth.login.succeeded', $identity, $request, ['role' => $role, 'requires_password_change' => $requiresPasswordChange]);
 
-        return response()->json(['data' => [
+        $response = response()->json(['data' => [
             'role' => $role,
             'requires_password_change' => $requiresPasswordChange,
             'redirect_to' => $destination,
             'profile' => $identity instanceof PlatformAdmin
                 ? ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email, 'is_active' => $identity->is_active]
                 : ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email, 'requires_password_change' => $identity->must_change_password],
-        ]]);
+        ], 'message' => 'Login successful.']);
+        return $tokenService->addCookies($response, $tokenService->issue($identity));
+    }
+
+    public function refresh(Request $request, AuthenticationTokenService $tokenService)
+    {
+        $result = $tokenService->refreshFromCookie($request->cookie(AuthenticationTokenService::REFRESH_COOKIE));
+        if (! $result) return $tokenService->forgetCookies(response()->json(['message' => 'Your refresh session is invalid or expired.', 'code' => 'AUTH_REFRESH_INVALID'], 401));
+
+        return $tokenService->addCookies(response()->json(['message' => 'Session refreshed successfully.']), $result['tokens']);
     }
 
     public function me(Request $request)
@@ -99,7 +97,7 @@ class UnifiedAuthController extends Controller
             return response()->json(['data' => ['role' => 'platform-admin', 'requires_password_change' => false, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email, 'is_active' => $identity->is_active]]]);
         }
         if ($identity instanceof User) {
-            return response()->json(['data' => ['role' => 'business-owner', 'requires_password_change' => $identity->must_change_password, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email]]]);
+            return response()->json(['data' => ['role' => $identity->role ?: 'business-owner', 'requires_password_change' => $identity->must_change_password, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email]]]);
         }
 
         return response()->json(['message' => 'Unauthenticated.'], 401);
@@ -114,23 +112,24 @@ class UnifiedAuthController extends Controller
         if (Auth::guard('web')->check()) {
             Auth::guard('web')->logout();
         }
+        app(AuthenticationTokenService::class)->revokeFromRequest($request->cookie(AuthenticationTokenService::ACCESS_COOKIE), $request->cookie(AuthenticationTokenService::REFRESH_COOKIE));
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         $auditLogger->record('auth.logout', $identity, $request);
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        return app(AuthenticationTokenService::class)->forgetCookies(response()->json(['message' => 'Logout successful.']));
     }
 
     private function matchingAdmins(string $identifier)
     {
         return PlatformAdmin::query()->where(function ($query) use ($identifier): void {
             $query->whereRaw('LOWER(email) = ?', [$identifier])->orWhere('username', $identifier);
-        })->get();
+        })->where('role', 'platform-admin')->get();
     }
 
     private function matchingOwners(string $identifier)
     {
-        return User::query()->where(function ($query) use ($identifier): void {
+        return User::query()->where(function ($query): void { $query->where('role', '!=', 'platform-admin')->orWhereNull('role'); })->where(function ($query) use ($identifier): void {
             $query->whereRaw('LOWER(email) = ?', [$identifier])->orWhere('username', $identifier);
         })->get();
     }

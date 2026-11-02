@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('payment_verification_records', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->foreignUlid('manual_subscription_payment_id')->constrained('manual_subscription_payments')->cascadeOnDelete();
-            $table->foreignUlid('platform_admin_id')->constrained('platform_admins');
+            $table->foreignUlid('platform_admin_id')->constrained('users');
             $table->string('action', 20);
             $table->timestampTz('verified_at');
             $table->string('rejection_reason', 1000)->nullable();
