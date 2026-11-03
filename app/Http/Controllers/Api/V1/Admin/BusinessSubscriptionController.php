@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateSubscriptionInvoicePdf;
+use App\Jobs\SendSubscriptionInvoice;
 use App\Models\Business;
 use App\Models\BusinessSubscription;
 use App\Models\ManualSubscriptionPayment;
@@ -12,9 +14,11 @@ use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionPlanVersion;
 use App\Services\AuditLogger;
 use App\Services\SubscriptionInvoiceService;
+use App\Services\SubscriptionInvoicePdfService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -68,6 +72,40 @@ class BusinessSubscriptionController extends Controller
     {
         $payment->load(['business', 'planVersion.plan', 'subscription']);
         return response()->json(['data' => $this->payment($payment), 'message' => 'Invoice loaded successfully.']);
+    }
+
+    public function generateInvoicePdf(ManualSubscriptionPayment $payment, SubscriptionInvoicePdfService $pdfService)
+    {
+        $path = $pdfService->path($payment);
+        if (! Storage::disk('local')->exists($path)) {
+            GenerateSubscriptionInvoicePdf::dispatch($payment->id)->afterCommit();
+            return response()->json(['message' => 'Invoice PDF is being prepared. Please try the download again shortly.'], 202);
+        }
+
+        return response()->json(['message' => 'Invoice PDF is ready.']);
+    }
+
+    public function downloadInvoicePdf(ManualSubscriptionPayment $payment, SubscriptionInvoicePdfService $pdfService)
+    {
+        $path = $pdfService->path($payment);
+        if (! Storage::disk('local')->exists($path)) {
+            return response()->json(['message' => 'Invoice PDF is still being prepared.'], 202);
+        }
+
+        return response()->download(Storage::disk('local')->path($path), 'invoice-'.($payment->invoice_number ?: $payment->id).'.pdf', ['Content-Type' => 'application/pdf'])->deleteFileAfterSend(true);
+    }
+
+    public function sendInvoice(ManualSubscriptionPayment $payment)
+    {
+        $payment->load('business.owners');
+        $email = $payment->business?->owners->first()?->email ?: $payment->business?->email;
+        if (! $email) {
+            throw ValidationException::withMessages(['email' => 'This business does not have an owner or business email for invoice delivery.']);
+        }
+
+        SendSubscriptionInvoice::dispatch($payment->id, $email)->afterCommit();
+
+        return response()->json(['message' => 'Invoice email has been queued for '.$email.'.'], 202);
     }
 
     public function storePayment(Request $request, Business $business, AuditLogger $auditLogger, SubscriptionInvoiceService $invoiceService)
@@ -312,7 +350,7 @@ class BusinessSubscriptionController extends Controller
             'payment_method' => $payment->payment_method, 'transaction_reference' => $payment->transaction_reference,
             'payment_date' => $payment->payment_date?->toISOString(), 'billing_cycle' => $payment->billing_cycle, 'billing_periods' => $payment->billing_periods,
             'discount_type' => $payment->discount_type, 'discount_value_basis_points' => $payment->discount_value_basis_points, 'original_subtotal_paisa' => $payment->original_subtotal_paisa, 'discount_amount_paisa' => $payment->discount_amount_paisa, 'final_amount_paisa' => $payment->final_amount_paisa,
-            'plan' => $payment->planVersion ? ['version_id' => $payment->planVersion->id, 'version' => $payment->planVersion->version, 'name' => $payment->planVersion->plan?->name] : null,
+            'plan' => $payment->planVersion ? ['version_id' => $payment->planVersion->id, 'version' => $payment->planVersion->version, 'name' => $payment->planVersion->plan?->name, 'max_turfs' => $payment->planVersion->max_turfs, 'max_branches' => $payment->planVersion->max_branches, 'max_staff' => $payment->planVersion->max_staff] : null,
             'rejection_reason' => $payment->rejection_reason,
             'verification_at' => $payment->verification_at?->toISOString(),
             'subscription' => $payment->relationLoaded('subscription') && $payment->subscription ? $this->subscription($payment->subscription) : null,
@@ -327,7 +365,7 @@ class BusinessSubscriptionController extends Controller
             'id' => $subscription->id, 'status' => $subscription->status, 'access_status' => $isAccessible ? 'active' : 'expired',
             'billing_cycle' => $subscription->billing_cycle, 'billing_periods' => $subscription->billing_periods, 'price_paisa' => $subscription->price_paisa, 'currency' => $subscription->currency,
             'starts_at' => $subscription->starts_at?->toISOString(), 'expires_at' => $subscription->expires_at?->toISOString(), 'activated_at' => $subscription->activated_at?->toISOString(),
-            'plan' => $subscription->planVersion ? ['version_id' => $subscription->planVersion->id, 'version' => $subscription->planVersion->version, 'name' => $subscription->planVersion->plan?->name] : null,
+            'plan' => $subscription->planVersion ? ['version_id' => $subscription->planVersion->id, 'version' => $subscription->planVersion->version, 'name' => $subscription->planVersion->plan?->name, 'max_turfs' => $subscription->planVersion->max_turfs, 'max_branches' => $subscription->planVersion->max_branches, 'max_staff' => $subscription->planVersion->max_staff] : null,
             'payment_id' => $subscription->manual_subscription_payment_id,
         ];
     }

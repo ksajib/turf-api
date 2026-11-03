@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Admin\AuthController;
 use App\Http\Controllers\Api\V1\Admin\BusinessController;
 use App\Http\Controllers\Api\V1\Admin\SubscriptionPlanController;
 use App\Http\Controllers\Api\V1\Admin\BusinessSubscriptionController;
+use App\Http\Controllers\Api\V1\Admin\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Owner\AuthController as OwnerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,8 @@ Route::prefix('v1/admin/auth')->group(function () {
 });
 
 Route::prefix('v1/admin')->middleware(['api.token', 'platform.admin'])->group(function () {
+    Route::get('dashboard/overview', [PlatformDashboardController::class, 'overview']);
+    Route::get('settings', [PlatformDashboardController::class, 'settings']);
     Route::get('subscription-plans/published', [BusinessSubscriptionController::class, 'plans']);
     Route::get('subscriptions', [BusinessSubscriptionController::class, 'index']);
     Route::get('subscription-payments', [BusinessSubscriptionController::class, 'payments']);
@@ -54,6 +57,9 @@ Route::prefix('v1/admin')->middleware(['api.token', 'platform.admin'])->group(fu
     Route::post('businesses/{business}/subscription/payments', [BusinessSubscriptionController::class, 'storePayment']);
     Route::post('businesses/{business}/subscription/complete-payment', [BusinessSubscriptionController::class, 'completePayment']);
     Route::get('subscription-payments/{payment}/invoice', [BusinessSubscriptionController::class, 'invoice']);
+    Route::post('subscription-payments/{payment}/invoice/pdf', [BusinessSubscriptionController::class, 'generateInvoicePdf']);
+    Route::get('subscription-payments/{payment}/invoice/pdf', [BusinessSubscriptionController::class, 'downloadInvoicePdf']);
+    Route::post('subscription-payments/{payment}/invoice/send', [BusinessSubscriptionController::class, 'sendInvoice']);
     Route::apiResource('plans', SubscriptionPlanController::class)->only(['index', 'store', 'show', 'update']);
     Route::post('plans/{plan}/publish', [SubscriptionPlanController::class, 'publish']);
     Route::post('plans/{plan}/archive', [SubscriptionPlanController::class, 'archive']);
