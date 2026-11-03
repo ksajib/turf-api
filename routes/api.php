@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\V1\Admin\SubscriptionPlanController;
 use App\Http\Controllers\Api\V1\Admin\BusinessSubscriptionController;
 use App\Http\Controllers\Api\V1\Admin\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Owner\AuthController as OwnerAuthController;
+use App\Http\Controllers\Api\V1\Owner\OwnerWorkspaceController;
+use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +31,15 @@ Route::prefix('v1/owner/auth')->group(function () {
         Route::post('logout', [OwnerAuthController::class, 'logout']);
     });
     Route::middleware(['auth:sanctum', 'owner.password.changed'])->get('profile', [OwnerAuthController::class, 'me']);
+});
+
+Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->group(function () {
+    Route::get('profile', [OwnerWorkspaceController::class, 'profile']);
+    Route::get('dashboard/overview', [OwnerWorkspaceController::class, 'dashboard']);
+});
+
+Route::prefix('v1/customer')->group(function () {
+    Route::post('register', [CustomerAuthController::class, 'register']);
 });
 
 Route::prefix('v1/admin/auth')->group(function () {

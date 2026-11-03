@@ -74,4 +74,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Business::class, 'business_owners')->withTimestamps();
     }
+
+    public function customerProfile()
+    {
+        return $this->hasOne(Customer::class);
+    }
 }
