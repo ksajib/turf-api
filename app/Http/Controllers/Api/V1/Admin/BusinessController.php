@@ -9,11 +9,10 @@ use App\Models\CredentialDelivery;
 use App\Models\ManualSubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
-use App\Models\Role;
 use App\Services\AuditLogger;
 use App\Services\OwnerCredentialDelivery;
-use App\Services\OwnerTemporaryPasswordGenerator;
 use App\Services\ReissueOwnerCredentials;
+use App\Services\UserProvisioningService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +24,7 @@ class BusinessController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Business::query()->with(['owners:id,name,email,must_change_password', 'onboardingPlan:id,name,slug,status'])->latest();
+        $query = Business::query()->with(['owners:id,name,email,must_change_password', 'onboardingPlan:id,name,slug,status', 'activeSubscription.planVersion.plan', 'activeSubscription.payment'])->latest();
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
         }
@@ -89,7 +88,7 @@ class BusinessController extends Controller
         ]]);
     }
 
-    public function store(Request $request, AuditLogger $auditLogger, OwnerTemporaryPasswordGenerator $passwordGenerator)
+    public function store(Request $request, AuditLogger $auditLogger, UserProvisioningService $userProvisioningService)
     {
         $data = $this->validated($request);
         $logoPath = null;
@@ -99,25 +98,17 @@ class BusinessController extends Controller
         }
 
         try {
-            $business = DB::transaction(function () use ($data, $request, $auditLogger, $logoPath, $passwordGenerator): Business {
+        $business = DB::transaction(function () use ($data, $request, $auditLogger, $logoPath, $userProvisioningService): Business {
             $ownerName = $data['owner_name'];
             $ownerUsername = $data['owner_username'];
             $ownerEmail = $data['owner_email'];
             $ownerPhone = $data['owner_phone'];
             $credentialGeneration = (string) Str::uuid();
             unset($data['owner_name'], $data['owner_username'], $data['owner_email'], $data['owner_phone'], $data['logo']);
-            $temporaryPassword = $passwordGenerator->generate();
-            $owner = User::create([
-                'name' => $ownerName,
-                'username' => $ownerUsername,
-                'email' => $ownerEmail,
-                'phone' => $ownerPhone,
-                'password' => $temporaryPassword,
-                'must_change_password' => true,
-                'temporary_password_expires_at' => now()->addDay(),
-            ]);
             $business = Business::create(array_merge($data, ['logo_path' => $logoPath, 'status' => Business::STATUS_PENDING]));
-            $owner->forceFill(['business_id' => $business->id, 'role' => 'business-owner', 'role_id' => Role::where('name', 'business-owner')->whereNull('business_id')->value('id'), 'status' => 'active'])->save();
+            $provisioned = $userProvisioningService->create(['name' => $ownerName, 'username' => $ownerUsername, 'email' => $ownerEmail, 'phone' => $ownerPhone], 'business-owner', $business->id, true);
+            $owner = $provisioned['user'];
+            $temporaryPassword = $provisioned['temporary_password'];
             $business->owners()->attach($owner->id, ['id' => (string) Str::ulid()]);
             app(OwnerCredentialDelivery::class)->queue($owner, $business, $temporaryPassword, $credentialGeneration);
             $auditLogger->record('admin.business.created', $request->user(), $request, [
@@ -136,12 +127,12 @@ class BusinessController extends Controller
             throw $exception;
         }
 
-        return response()->json(['data' => $this->business($business->load(['owners:id,name,email', 'onboardingPlan:id,name,slug,status', 'credentialDeliveries']))], 201);
+        return response()->json(['data' => $this->business($business->load(['owners:id,name,email', 'onboardingPlan:id,name,slug,status', 'credentialDeliveries', 'activeSubscription.planVersion.plan', 'activeSubscription.payment']))], 201);
     }
 
     public function show(Business $business)
     {
-        return response()->json(['data' => $this->business($business->load(['owners:id,name,email', 'onboardingPlan:id,name,slug,status', 'credentialDeliveries']))]);
+        return response()->json(['data' => $this->business($business->load(['owners:id,name,email', 'onboardingPlan:id,name,slug,status', 'credentialDeliveries', 'activeSubscription.planVersion.plan', 'activeSubscription.payment']))]);
     }
 
     public function update(Request $request, Business $business, AuditLogger $auditLogger)
@@ -234,6 +225,16 @@ class BusinessController extends Controller
             'can_reissue_credentials' => (bool) ($owner?->must_change_password),
             'owners' => $business->owners->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email])->values(),
             'onboarding_plan' => $business->onboardingPlan ? ['id' => $business->onboardingPlan->id, 'name' => $business->onboardingPlan->name, 'slug' => $business->onboardingPlan->slug, 'status' => $business->onboardingPlan->status] : null,
+            'subscription' => $business->relationLoaded('activeSubscription') && $business->activeSubscription ? [
+                'id' => $business->activeSubscription->id,
+                'plan' => $business->activeSubscription->planVersion?->plan?->name,
+                'billing_cycle' => $business->activeSubscription->billing_cycle,
+                'amount_paisa' => $business->activeSubscription->price_paisa,
+                'currency' => $business->activeSubscription->currency,
+                'expires_at' => $business->activeSubscription->expires_at?->toISOString(),
+                'payment_status' => $business->activeSubscription->payment?->status,
+                'payment_id' => $business->activeSubscription->manual_subscription_payment_id,
+            ] : null,
             'logo_url' => $business->logo_path ? Storage::disk('public')->url($business->logo_path) : null,
             'credential_deliveries' => $business->relationLoaded('credentialDeliveries') ? $business->credentialDeliveries->map(fn ($delivery) => ['id' => $delivery->id, 'channel' => $delivery->channel, 'status' => $delivery->status, 'error_code' => $delivery->last_error_code, 'provider_reference' => $delivery->provider_reference, 'updated_at' => $delivery->updated_at?->toISOString()])->values() : [],
             'created_at' => $business->created_at?->toISOString(),

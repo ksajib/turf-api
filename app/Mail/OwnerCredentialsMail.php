@@ -4,7 +4,6 @@ namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
@@ -30,8 +29,4 @@ class OwnerCredentialsMail extends Mailable
         return new Content(text: 'mail.owner-credentials');
     }
 
-    public function headers(): array
-    {
-        return [];
-    }
 }

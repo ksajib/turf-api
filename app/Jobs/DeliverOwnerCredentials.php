@@ -50,7 +50,11 @@ class DeliverOwnerCredentials implements ShouldQueue, ShouldBeEncrypted
             $this->finalize($result['status'], $result['error_code'] ?? null, $result['provider_reference'] ?? null);
         } catch (Throwable $exception) {
             $this->finalize(CredentialDelivery::STATUS_UNKNOWN, 'delivery_outcome_unknown', null);
-            Log::warning('Owner credential delivery outcome is unknown.', ['delivery_id' => $this->deliveryId, 'error' => $exception::class]);
+            Log::warning('Owner credential delivery outcome is unknown.', [
+                'delivery_id' => $this->deliveryId,
+                'error' => $exception::class,
+                'error_message' => $exception->getMessage(),
+            ]);
         }
     }
 

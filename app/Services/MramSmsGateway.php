@@ -98,14 +98,14 @@ class MramSmsGateway implements SmsGateway
             || isset($parts['user'])
             || isset($parts['pass'])
             || isset($parts['port'])
-            || ! in_array($parts['path'] ?? '', ['', '/'], true)
+            || blank($parts['path'] ?? null)
             || isset($parts['query'])
             || isset($parts['fragment'])
         ) {
             return null;
         }
 
-        return 'https://' . self::TRUSTED_HOST . '/smsapi';
+        return rtrim($baseUrl, '/');
     }
 
     private function logResponseDiagnostics(Response $response): void

@@ -11,6 +11,7 @@ use App\Models\SubscriptionLifecycleHistory;
 use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionPlanVersion;
 use App\Services\AuditLogger;
+use App\Services\SubscriptionInvoiceService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,18 @@ use Illuminate\Validation\ValidationException;
 
 class BusinessSubscriptionController extends Controller
 {
+    public function index()
+    {
+        $subscriptions = BusinessSubscription::query()
+            ->with(['business.owners', 'planVersion.plan', 'payment'])
+            ->latest('created_at')
+            ->get()
+            ->map(fn (BusinessSubscription $subscription) => $this->subscriptionDirectoryItem($subscription))
+            ->values();
+
+        return response()->json(['data' => $subscriptions]);
+    }
+
     public function plans()
     {
         $plans = SubscriptionPlan::query()->where('status', SubscriptionPlan::STATUS_PUBLISHED)->with('versions')->orderBy('name')->get()->map(function (SubscriptionPlan $plan) {
@@ -51,7 +64,13 @@ class BusinessSubscriptionController extends Controller
         ]]);
     }
 
-    public function storePayment(Request $request, Business $business, AuditLogger $auditLogger)
+    public function invoice(ManualSubscriptionPayment $payment)
+    {
+        $payment->load(['business', 'planVersion.plan', 'subscription']);
+        return response()->json(['data' => $this->payment($payment), 'message' => 'Invoice loaded successfully.']);
+    }
+
+    public function storePayment(Request $request, Business $business, AuditLogger $auditLogger, SubscriptionInvoiceService $invoiceService)
     {
         $data = $request->validate([
             'subscription_plan_version_id' => ['required', 'string', 'exists:subscription_plan_versions,id'],
@@ -61,7 +80,7 @@ class BusinessSubscriptionController extends Controller
             'payment_date' => ['required', 'date'],
         ]);
 
-        $payment = DB::transaction(function () use ($data, $business, $request, $auditLogger): ManualSubscriptionPayment {
+        $payment = DB::transaction(function () use ($data, $business, $request, $auditLogger, $invoiceService): ManualSubscriptionPayment {
             $lockedBusiness = Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             if ($lockedBusiness->subscriptions()->where('status', BusinessSubscription::STATUS_ACTIVE)->exists()) {
                 throw ValidationException::withMessages(['subscription' => 'This business already has an active subscription.']);
@@ -80,6 +99,7 @@ class BusinessSubscriptionController extends Controller
                 'status' => ManualSubscriptionPayment::STATUS_PENDING,
                 'recorded_by_platform_admin_id' => $request->user()->getKey(),
             ]);
+            $invoiceService->issue($payment);
             $auditLogger->record('admin.subscription_payment.recorded', $request->user(), $request, ['payment_id' => $payment->id, 'business_id' => $lockedBusiness->id, 'amount_paisa' => $amount, 'billing_cycle' => $payment->billing_cycle, 'payment_method' => $payment->payment_method]);
 
             return $payment;
@@ -88,7 +108,7 @@ class BusinessSubscriptionController extends Controller
         return response()->json(['data' => $this->payment($payment->load(['planVersion.plan', 'verificationRecords']))], 201);
     }
 
-    public function completePayment(Request $request, Business $business, AuditLogger $auditLogger)
+    public function completePayment(Request $request, Business $business, AuditLogger $auditLogger, SubscriptionInvoiceService $invoiceService)
     {
         $data = $request->validate([
             'subscription_plan_version_id' => ['required', 'string', 'exists:subscription_plan_versions,id'],
@@ -102,7 +122,7 @@ class BusinessSubscriptionController extends Controller
             'payment_received_confirmation' => ['accepted'],
         ]);
 
-        $result = DB::transaction(function () use ($data, $business, $request, $auditLogger): array {
+        $result = DB::transaction(function () use ($data, $business, $request, $auditLogger, $invoiceService): array {
             $lockedBusiness = Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             if ($lockedBusiness->subscriptions()->where('status', BusinessSubscription::STATUS_ACTIVE)->exists()) {
                 throw ValidationException::withMessages(['subscription' => 'This business already has an active subscription.']);
@@ -150,6 +170,7 @@ class BusinessSubscriptionController extends Controller
                 'verification_at' => $now,
                 'payment_confirmed_at' => $now,
             ]);
+            $invoiceService->issue($payment);
             $subscription = BusinessSubscription::create([
                 'business_id' => $lockedBusiness->id,
                 'subscription_plan_version_id' => $version->id,
@@ -179,9 +200,21 @@ class BusinessSubscriptionController extends Controller
         return response()->json(['data' => $payments->map(fn (ManualSubscriptionPayment $payment) => $this->payment($payment))->values()]);
     }
 
-    public function verify(Request $request, ManualSubscriptionPayment $payment, AuditLogger $auditLogger)
+    public function payments()
     {
-        $result = DB::transaction(function () use ($request, $payment, $auditLogger): array {
+        $payments = ManualSubscriptionPayment::query()
+            ->with(['business.owners', 'planVersion.plan', 'subscription'])
+            ->latest('payment_date')
+            ->get()
+            ->map(fn (ManualSubscriptionPayment $payment) => $this->payment($payment))
+            ->values();
+
+        return response()->json(['data' => $payments]);
+    }
+
+    public function verify(Request $request, ManualSubscriptionPayment $payment, AuditLogger $auditLogger, SubscriptionInvoiceService $invoiceService)
+    {
+        $result = DB::transaction(function () use ($request, $payment, $auditLogger, $invoiceService): array {
             $lockedPayment = ManualSubscriptionPayment::query()->whereKey($payment->id)->lockForUpdate()->with('planVersion.plan')->firstOrFail();
             if ($lockedPayment->status !== ManualSubscriptionPayment::STATUS_PENDING) {
                 return ['payment' => $lockedPayment->load(['subscription', 'verificationRecords']), 'idempotent' => true];
@@ -216,6 +249,8 @@ class BusinessSubscriptionController extends Controller
                 'activated_at' => $startsLocal->utc(),
             ]);
             $lockedPayment->update(['status' => ManualSubscriptionPayment::STATUS_VERIFIED, 'verified_by_platform_admin_id' => $request->user()->getKey(), 'verification_at' => $startsLocal->utc(), 'rejection_reason' => null]);
+            $invoiceService->issue($lockedPayment);
+            $invoiceService->syncStatus($lockedPayment);
             PaymentVerificationRecord::create(['manual_subscription_payment_id' => $lockedPayment->id, 'platform_admin_id' => $request->user()->getKey(), 'action' => ManualSubscriptionPayment::STATUS_VERIFIED, 'verified_at' => $startsLocal->utc()]);
             SubscriptionLifecycleHistory::create(['business_subscription_id' => $subscription->id, 'status' => BusinessSubscription::STATUS_ACTIVE, 'action' => 'activated', 'platform_admin_id' => $request->user()->getKey(), 'starts_at' => $subscription->starts_at, 'expires_at' => $subscription->expires_at, 'metadata' => ['payment_id' => $lockedPayment->id, 'plan_version_id' => $version->id]]);
             $business->update(['status' => 'active']);
@@ -227,16 +262,18 @@ class BusinessSubscriptionController extends Controller
         return response()->json(['data' => $this->payment($result['payment']), 'idempotent' => $result['idempotent']]);
     }
 
-    public function reject(Request $request, ManualSubscriptionPayment $payment, AuditLogger $auditLogger)
+    public function reject(Request $request, ManualSubscriptionPayment $payment, AuditLogger $auditLogger, SubscriptionInvoiceService $invoiceService)
     {
         $data = $request->validate(['rejection_reason' => ['required', 'string', 'max:1000']]);
-        $result = DB::transaction(function () use ($request, $payment, $data, $auditLogger): array {
+        $result = DB::transaction(function () use ($request, $payment, $data, $auditLogger, $invoiceService): array {
             $lockedPayment = ManualSubscriptionPayment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if ($lockedPayment->status !== ManualSubscriptionPayment::STATUS_PENDING) {
                 return ['payment' => $lockedPayment->load('verificationRecords'), 'idempotent' => true];
             }
             $now = CarbonImmutable::now('UTC');
             $lockedPayment->update(['status' => ManualSubscriptionPayment::STATUS_REJECTED, 'verified_by_platform_admin_id' => $request->user()->getKey(), 'verification_at' => $now, 'rejection_reason' => $data['rejection_reason']]);
+            $invoiceService->issue($lockedPayment);
+            $invoiceService->syncStatus($lockedPayment);
             PaymentVerificationRecord::create(['manual_subscription_payment_id' => $lockedPayment->id, 'platform_admin_id' => $request->user()->getKey(), 'action' => ManualSubscriptionPayment::STATUS_REJECTED, 'verified_at' => $now, 'rejection_reason' => $data['rejection_reason']]);
             $auditLogger->record('admin.subscription_payment.rejected', $request->user(), $request, ['payment_id' => $lockedPayment->id, 'business_id' => $lockedPayment->business_id]);
             return ['payment' => $lockedPayment->refresh()->load('verificationRecords'), 'idempotent' => false];
@@ -257,7 +294,20 @@ class BusinessSubscriptionController extends Controller
     private function payment(ManualSubscriptionPayment $payment): array
     {
         return [
-            'id' => $payment->id, 'business_id' => $payment->business_id, 'status' => $payment->status,
+            'id' => $payment->id, 'invoice_number' => $payment->invoice_number, 'invoice_status' => $payment->invoice_status, 'invoice_issued_at' => $payment->invoice_issued_at?->toISOString(), 'business_id' => $payment->business_id, 'status' => $payment->status,
+            'business' => $payment->relationLoaded('business') && $payment->business ? [
+                'id' => $payment->business->id,
+                'name' => $payment->business->name,
+                'phone' => $payment->business->phone,
+                'address' => $payment->business->address,
+                'district_city' => $payment->business->district_city,
+                'owner' => $payment->business->owners->first() ? [
+                    'id' => $payment->business->owners->first()->id,
+                    'name' => $payment->business->owners->first()->name,
+                    'email' => $payment->business->owners->first()->email,
+                    'phone' => $payment->business->owners->first()->phone,
+                ] : null,
+            ] : null,
             'amount_paisa' => $payment->amount_paisa, 'currency' => $payment->currency,
             'payment_method' => $payment->payment_method, 'transaction_reference' => $payment->transaction_reference,
             'payment_date' => $payment->payment_date?->toISOString(), 'billing_cycle' => $payment->billing_cycle, 'billing_periods' => $payment->billing_periods,
@@ -279,6 +329,34 @@ class BusinessSubscriptionController extends Controller
             'starts_at' => $subscription->starts_at?->toISOString(), 'expires_at' => $subscription->expires_at?->toISOString(), 'activated_at' => $subscription->activated_at?->toISOString(),
             'plan' => $subscription->planVersion ? ['version_id' => $subscription->planVersion->id, 'version' => $subscription->planVersion->version, 'name' => $subscription->planVersion->plan?->name] : null,
             'payment_id' => $subscription->manual_subscription_payment_id,
+        ];
+    }
+
+    private function subscriptionDirectoryItem(BusinessSubscription $subscription): array
+    {
+        $business = $subscription->business;
+        $owner = $business?->owners->first();
+        $payment = $subscription->payment;
+
+        return [
+            'id' => $subscription->id,
+            'business_id' => $subscription->business_id,
+            'business' => $business?->name,
+            'location' => $business?->district_city,
+            'owner' => $owner?->name,
+            'owner_email' => $owner?->email,
+            'owner_phone' => $owner?->phone,
+            'plan' => $subscription->planVersion?->plan?->name,
+            'cycle' => $subscription->billing_cycle,
+            'amount_paisa' => $subscription->price_paisa,
+            'currency' => $subscription->currency,
+            'started_at' => $subscription->starts_at?->toISOString(),
+            'expires_at' => $subscription->expires_at?->toISOString(),
+            'subscription_status' => $subscription->status,
+            'access_status' => $subscription->isCurrentlyActive() ? 'active' : 'expired',
+            'payment_status' => $payment?->status,
+            'payment_id' => $subscription->manual_subscription_payment_id,
+            'invoice_number' => $payment?->invoice_number,
         ];
     }
 }
