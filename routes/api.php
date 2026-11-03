@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Admin\BusinessSubscriptionController;
 use App\Http\Controllers\Api\V1\Admin\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Owner\AuthController as OwnerAuthController;
 use App\Http\Controllers\Api\V1\Owner\OwnerWorkspaceController;
+use App\Http\Controllers\Api\V1\Owner\TurfController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
@@ -36,6 +37,13 @@ Route::prefix('v1/owner/auth')->group(function () {
 Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->group(function () {
     Route::get('profile', [OwnerWorkspaceController::class, 'profile']);
     Route::get('dashboard/overview', [OwnerWorkspaceController::class, 'dashboard']);
+    Route::get('turfs', [TurfController::class, 'index']);
+    Route::post('turfs', [TurfController::class, 'store']);
+    Route::get('turfs/{turf}', [TurfController::class, 'show']);
+    Route::post('turfs/{turf}', [TurfController::class, 'update']);
+    Route::patch('turfs/{turf}', [TurfController::class, 'update']);
+    Route::patch('turfs/{turf}/status', [TurfController::class, 'status']);
+    Route::delete('turfs/{turf}', [TurfController::class, 'destroy']);
 });
 
 Route::prefix('v1/customer')->group(function () {

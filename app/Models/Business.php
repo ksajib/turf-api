@@ -41,4 +41,9 @@ class Business extends Model
     {
         return $this->hasOne(BusinessSubscription::class)->where('status', BusinessSubscription::STATUS_ACTIVE)->latestOfMany();
     }
+
+    public function turfs()
+    {
+        return $this->hasMany(Turf::class);
+    }
 }
