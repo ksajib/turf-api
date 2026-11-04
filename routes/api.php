@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\Owner\BookingController;
 use App\Http\Controllers\Api\V1\Owner\PaymentController;
 use App\Http\Controllers\Api\V1\Owner\CustomerController;
 use App\Http\Controllers\Api\V1\Owner\RoleController;
+use App\Http\Controllers\Api\V1\Owner\ReportController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -76,6 +77,7 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::post('roles/{role}/duplicate', [RoleController::class, 'duplicate']);
     Route::patch('roles/{role}/status', [RoleController::class, 'status']);
     Route::delete('roles/{role}', [RoleController::class, 'destroy']);
+    Route::get('reports', [ReportController::class, 'index']);
 });
 
 Route::prefix('v1/customer')->group(function () {
