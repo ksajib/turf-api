@@ -46,4 +46,9 @@ class Business extends Model
     {
         return $this->hasMany(Turf::class);
     }
+
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
 }

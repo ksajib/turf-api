@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Business;
+use App\Models\Booking;
+use App\Models\Turf;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,10 +28,10 @@ class OwnerWorkspaceController extends Controller
             'business' => $this->workspace($user, $business),
             'metrics' => [
                 'staff_count' => User::query()->where('business_id', $business->id)->where('role', '!=', 'business-owner')->where('status', 'active')->count(),
-                'turf_count' => null,
-                'booking_count' => null,
-                'revenue_paisa' => null,
-                'pending_payments' => null,
+                'turf_count' => Turf::query()->where('business_id', $business->id)->count(),
+                'booking_count' => Booking::query()->where('business_id', $business->id)->count(),
+                'revenue_taka' => Booking::query()->where('business_id', $business->id)->whereIn('status', ['confirmed', 'completed'])->sum('price_taka'),
+                'pending_payments' => Booking::query()->where('business_id', $business->id)->whereIn('payment_status', ['unpaid', 'pending'])->count(),
             ],
             'subscription' => $subscription ? [
                 'id' => $subscription->id,

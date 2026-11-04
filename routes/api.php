@@ -8,8 +8,11 @@ use App\Http\Controllers\Api\V1\Admin\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Owner\AuthController as OwnerAuthController;
 use App\Http\Controllers\Api\V1\Owner\OwnerWorkspaceController;
 use App\Http\Controllers\Api\V1\Owner\TurfController;
+use App\Http\Controllers\Api\V1\Owner\BookingController;
+use App\Http\Controllers\Api\V1\Owner\CustomerController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('v1/health', fn () => response()->json(['status' => 'ok']))->name('api.v1.health');
@@ -21,6 +24,12 @@ Route::prefix('v1/auth')->group(function () {
         Route::get('me', [UnifiedAuthController::class, 'me']);
         Route::post('logout', [UnifiedAuthController::class, 'logout']);
     });
+});
+
+Route::prefix('v1/notifications')->middleware('api.token')->group(function () {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::patch('{notification}/read', [NotificationController::class, 'read']);
+    Route::patch('read-all', [NotificationController::class, 'readAll']);
 });
 
 Route::prefix('v1/owner/auth')->group(function () {
@@ -44,6 +53,15 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::patch('turfs/{turf}', [TurfController::class, 'update']);
     Route::patch('turfs/{turf}/status', [TurfController::class, 'status']);
     Route::delete('turfs/{turf}', [TurfController::class, 'destroy']);
+    Route::get('bookings', [BookingController::class, 'index']);
+    Route::post('bookings', [BookingController::class, 'store']);
+    Route::get('bookings/slots', [BookingController::class, 'slots']);
+    Route::get('bookings/{booking}', [BookingController::class, 'show']);
+    Route::patch('bookings/{booking}', [BookingController::class, 'update']);
+    Route::patch('bookings/{booking}/status', [BookingController::class, 'status']);
+    Route::post('bookings/{booking}/payment', [BookingController::class, 'payment']);
+    Route::get('customers', [CustomerController::class, 'index']);
+    Route::post('customers', [CustomerController::class, 'store']);
 });
 
 Route::prefix('v1/customer')->group(function () {

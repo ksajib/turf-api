@@ -4,21 +4,19 @@ namespace App\Http\Controllers\Api\V1\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Turf;
+use App\Services\OwnerBusinessScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class TurfController extends Controller
 {
+    public function __construct(private readonly OwnerBusinessScope $scope) {}
     private function businessIds(Request $request): array
     {
         $user = $request->user();
         abort_unless($user, 401, 'Authentication is required.');
-        $ids = $user->businesses()->pluck('businesses.id')->map(fn ($id) => (string) $id)->all();
-        if ($user->business_id) $ids[] = (string) $user->business_id;
-        $ids = array_values(array_unique(array_filter($ids)));
-        abort_unless($ids, 403, 'No business is assigned to this account.');
-        return $ids;
+        return $this->scope->ids($user);
     }
 
     private function businessId(Request $request): string

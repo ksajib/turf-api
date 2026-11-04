@@ -34,4 +34,9 @@ class Turf extends Model
     {
         return $this->belongsTo(Business::class);
     }
+
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
 }
