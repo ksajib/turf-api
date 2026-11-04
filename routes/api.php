@@ -9,7 +9,9 @@ use App\Http\Controllers\Api\V1\Owner\AuthController as OwnerAuthController;
 use App\Http\Controllers\Api\V1\Owner\OwnerWorkspaceController;
 use App\Http\Controllers\Api\V1\Owner\TurfController;
 use App\Http\Controllers\Api\V1\Owner\BookingController;
+use App\Http\Controllers\Api\V1\Owner\PaymentController;
 use App\Http\Controllers\Api\V1\Owner\CustomerController;
+use App\Http\Controllers\Api\V1\Owner\RoleController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -61,8 +63,19 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::patch('bookings/{booking}', [BookingController::class, 'update']);
     Route::patch('bookings/{booking}/status', [BookingController::class, 'status']);
     Route::post('bookings/{booking}/payment', [BookingController::class, 'payment']);
+    Route::post('bookings/{booking}/invoice/send', [BookingController::class, 'sendInvoice']);
+    Route::get('bookings/{booking}/invoice/pdf', [BookingController::class, 'downloadInvoice']);
+    Route::get('payments', [PaymentController::class, 'index']);
+    Route::get('payments/{booking}', [PaymentController::class, 'show']);
     Route::get('customers', [CustomerController::class, 'index']);
     Route::post('customers', [CustomerController::class, 'store']);
+    Route::get('roles', [RoleController::class, 'index']);
+    Route::post('roles', [RoleController::class, 'store']);
+    Route::get('roles/{role}', [RoleController::class, 'show']);
+    Route::patch('roles/{role}', [RoleController::class, 'update']);
+    Route::post('roles/{role}/duplicate', [RoleController::class, 'duplicate']);
+    Route::patch('roles/{role}/status', [RoleController::class, 'status']);
+    Route::delete('roles/{role}', [RoleController::class, 'destroy']);
 });
 
 Route::prefix('v1/customer')->group(function () {

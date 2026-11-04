@@ -7,6 +7,8 @@ use App\Models\Booking;
 use App\Models\Customer;
 use App\Models\Turf;
 use App\Models\User;
+use App\Jobs\SendBookingInvoice;
+use App\Services\BookingInvoicePdfService;
 use App\Notifications\WorkspaceNotification;
 use App\Services\OwnerBusinessScope;
 use Carbon\CarbonImmutable;
@@ -224,6 +226,26 @@ class BookingController extends Controller
         $this->notifyCustomer($booking, 'Payment received', 'Payment for booking '.$booking->booking_number.' has been received and the booking is confirmed.', 'success');
         $this->notifyBusinessTeam($user, 'Payment completed', 'Payment for booking '.$booking->booking_number.' was completed successfully.', 'success');
         return response()->json(['data' => $this->present($booking->refresh()), 'message' => 'Payment received and booking confirmed successfully.']);
+    }
+
+    public function sendInvoice(Request $request, Booking $booking)
+    {
+        $user = $this->manage($request);
+        abort_unless(in_array($booking->business_id, $this->scope->ids($user), true), 404, 'Booking not found.');
+        $booking->loadMissing('customer.user');
+        $email = $booking->customer?->user?->email;
+        abort_unless($email, 422, 'This customer does not have an email address.');
+        SendBookingInvoice::dispatch($booking->id, $email);
+        return response()->json(['message' => 'Invoice email queued successfully.']);
+    }
+
+    public function downloadInvoice(Request $request, Booking $booking, BookingInvoicePdfService $pdfService)
+    {
+        $user = $this->user($request);
+        abort_unless(in_array($booking->business_id, $this->scope->ids($user), true), 404, 'Booking not found.');
+        $booking->loadMissing(['turf', 'customer.user']);
+        $filename = 'invoice-INV-'.$booking->booking_number.'.pdf';
+        return response()->streamDownload(fn () => print $pdfService->render($booking), $filename, ['Content-Type' => 'application/pdf']);
     }
 
     public function update(Request $request, Booking $booking)

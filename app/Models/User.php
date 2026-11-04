@@ -56,8 +56,13 @@ class User extends Authenticatable
     public function hasPermission(string $permission): bool
     {
         $permissions = $this->permissions ?: $this->roleRecord?->permissions ?: [];
-        return in_array($permission, $permissions, true)
-            || (is_array($permissions) && in_array(strtok($permission, '.'), $permissions, true));
+        if (! is_array($permissions)) return false;
+        if (in_array($permission, $permissions, true) || in_array(strtok($permission, '.'), $permissions, true)) return true;
+        [$module, $action] = array_pad(explode('.', $permission, 2), 2, null);
+        if (! $module || ! $action) return false;
+        if ($action === 'manage') return collect(['edit', 'update', 'delete'])->contains(fn (string $item) => in_array($module.'.'.$item, $permissions, true));
+        if ($action === 'create') return in_array($module.'.edit', $permissions, true) && in_array($module.'.update', $permissions, true);
+        return false;
     }
 
     protected function username(): Attribute
