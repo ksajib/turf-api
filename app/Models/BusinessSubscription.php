@@ -14,12 +14,12 @@ class BusinessSubscription extends Model
 
     protected $fillable = [
         'business_id', 'subscription_plan_version_id', 'manual_subscription_payment_id', 'billing_cycle', 'billing_periods',
-        'price_paisa', 'currency', 'status', 'starts_at', 'expires_at', 'activated_at',
+        'price_paisa', 'currency', 'status', 'pause_at_period_end', 'starts_at', 'expires_at', 'activated_at',
     ];
 
     protected function casts(): array
     {
-        return ['price_paisa' => 'integer', 'starts_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'activated_at' => 'immutable_datetime'];
+        return ['price_paisa' => 'integer', 'pause_at_period_end' => 'boolean', 'starts_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'activated_at' => 'immutable_datetime'];
     }
 
     public function business() { return $this->belongsTo(Business::class); }

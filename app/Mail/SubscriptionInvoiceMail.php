@@ -21,7 +21,7 @@ class SubscriptionInvoiceMail extends Mailable
 
     public function content(): Content
     {
-        return new Content(text: 'mail.subscription-invoice');
+        return new Content(view: 'mail.subscription-invoice');
     }
 
     public function attachments(): array

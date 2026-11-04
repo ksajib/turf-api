@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Owner\PaymentController;
 use App\Http\Controllers\Api\V1\Owner\CustomerController;
 use App\Http\Controllers\Api\V1\Owner\RoleController;
 use App\Http\Controllers\Api\V1\Owner\ReportController;
+use App\Http\Controllers\Api\V1\Owner\SubscriptionController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -78,6 +79,10 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::patch('roles/{role}/status', [RoleController::class, 'status']);
     Route::delete('roles/{role}', [RoleController::class, 'destroy']);
     Route::get('reports', [ReportController::class, 'index']);
+    Route::get('subscription', [SubscriptionController::class, 'show']);
+    Route::post('subscription/pause', [SubscriptionController::class, 'pause']);
+    Route::get('subscription/invoices/{payment}/pdf', [SubscriptionController::class, 'downloadInvoice']);
+    Route::post('subscription/invoices/{payment}/send', [SubscriptionController::class, 'sendInvoice']);
 });
 
 Route::prefix('v1/customer')->group(function () {
