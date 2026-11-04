@@ -20,18 +20,19 @@ class CustomerController extends Controller
     private function present(Customer $customer): array
     {
         $customer->loadMissing('user');
-        return ['id' => $customer->id, 'status' => $customer->status, 'user_id' => $customer->user_id, 'name' => $customer->user?->name, 'username' => $customer->user?->username, 'phone' => $customer->user?->phone, 'email' => $customer->user?->email, 'booking_count' => (int) ($customer->bookings_count ?? 0), 'total_spent_taka' => (int) ($customer->bookings_sum_price_taka ?? 0), 'created_at' => $customer->created_at?->toISOString()];
+        return ['id' => $customer->id, 'status' => $customer->status, 'user_id' => $customer->user_id, 'name' => $customer->user?->name, 'username' => $customer->user?->username, 'phone' => $customer->user?->phone, 'email' => $customer->user?->email, 'booking_count' => (int) ($customer->bookings_count ?? 0), 'total_spent_taka' => (int) ($customer->bookings_sum_price_taka ?? 0), 'last_booking_at' => $customer->bookings_max_created_at ? \Illuminate\Support\Carbon::parse($customer->bookings_max_created_at)->toISOString() : null, 'created_at' => $customer->created_at?->toISOString()];
     }
 
     public function index(Request $request)
     {
         $this->authorize($request);
-        $query = Customer::query()->with('user')->withCount('bookings')->withSum('bookings', 'price_taka')->where('status', 'active');
+        $query = Customer::query()->with('user')->withCount('bookings')->withSum('bookings', 'price_taka')->withMax('bookings', 'created_at');
         if ($request->filled('search')) {
             $search = trim((string) $request->input('search'));
             $query->whereHas('user', fn ($user) => $user->where('name', 'ilike', "%{$search}%")->orWhere('username', 'ilike', "%{$search}%")->orWhere('phone', 'ilike', "%{$search}%")->orWhere('email', 'ilike', "%{$search}%"));
         }
-        return response()->json(['data' => $query->latest()->get()->map(fn (Customer $customer) => $this->present($customer))->values()]);
+        $customers = $query->latest()->get();
+        return response()->json(['data' => $customers->map(fn (Customer $customer) => $this->present($customer))->values(), 'meta' => ['total' => $customers->count(), 'active' => $customers->where('status', 'active')->count(), 'repeat' => $customers->filter(fn (Customer $customer) => (int) ($customer->bookings_count ?? 0) >= 4)->count()]]);
     }
 
     public function store(Request $request, UserProvisioningService $provisioning)
