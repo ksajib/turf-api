@@ -55,6 +55,7 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::delete('turfs/{turf}', [TurfController::class, 'destroy']);
     Route::get('bookings', [BookingController::class, 'index']);
     Route::post('bookings', [BookingController::class, 'store']);
+    Route::get('availability', [BookingController::class, 'availability']);
     Route::get('bookings/slots', [BookingController::class, 'slots']);
     Route::get('bookings/{booking}', [BookingController::class, 'show']);
     Route::patch('bookings/{booking}', [BookingController::class, 'update']);

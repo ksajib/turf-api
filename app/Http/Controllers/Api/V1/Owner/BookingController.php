@@ -107,6 +107,32 @@ class BookingController extends Controller
         return response()->json(['data' => $query->get()->map(fn (Booking $booking) => $this->present($booking))->values()]);
     }
 
+    public function availability(Request $request)
+    {
+        $user = $this->user($request);
+        $data = $request->validate(['booking_date' => ['required', 'date_format:Y-m-d']]);
+        $turfs = Turf::whereIn('business_id', $this->scope->ids($user))->orderBy('name')->get();
+        $bookings = Booking::whereIn('turf_id', $turfs->pluck('id'))->whereDate('booking_date', $data['booking_date'])->whereIn('status', ['pending', 'confirmed'])->get(['turf_id', 'start_time', 'end_time', 'status']);
+        $result = $turfs->map(function (Turf $turf) use ($bookings, $data): array {
+            $busy = $bookings->where('turf_id', $turf->id);
+            $slots = [];
+            if ($turf->status === 'available' && !in_array(CarbonImmutable::parse($data['booking_date'])->format('D'), $turf->closed_days ?? [], true)) {
+                $open = CarbonImmutable::createFromFormat('H:i:s', (string) $turf->opening_time);
+                $close = CarbonImmutable::createFromFormat('H:i:s', (string) $turf->closing_time);
+                $step = (int) $turf->slot_duration_minutes + (int) $turf->buffer_minutes;
+                for ($start = $open; $start->addMinutes((int) $turf->slot_duration_minutes)->lessThanOrEqualTo($close); $start = $start->addMinutes($step)) {
+                    $end = $start->addMinutes((int) $turf->slot_duration_minutes);
+                    $startTime = $start->format('H:i');
+                    $endTime = $end->format('H:i');
+                    $match = $busy->first(fn (Booking $booking) => substr((string) $booking->start_time, 0, 5) < $endTime && substr((string) $booking->end_time, 0, 5) > $startTime);
+                    $slots[] = ['start_time' => $startTime, 'end_time' => $endTime, 'label' => $start->format('g:i A').' – '.$end->format('g:i A'), 'status' => $match?->status ?? 'available', 'price_taka' => $startTime >= substr((string) $turf->peak_start_time, 0, 5) && $endTime <= substr((string) $turf->peak_end_time, 0, 5) ? $turf->peak_price_taka : $turf->regular_price_taka];
+                }
+            }
+            return ['id' => $turf->id, 'name' => $turf->name, 'status' => $turf->status, 'slots' => $slots];
+        })->values();
+        return response()->json(['data' => $result]);
+    }
+
     public function slots(Request $request)
     {
         $user = $this->user($request);
