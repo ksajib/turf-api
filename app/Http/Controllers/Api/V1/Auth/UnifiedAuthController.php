@@ -7,6 +7,7 @@ use App\Models\PlatformAdmin;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\AuthenticationTokenService;
+use App\Services\StaffPermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -53,7 +54,7 @@ class UnifiedAuthController extends Controller
 
             $role = $identity->role ?: 'business-owner';
             $requiresPasswordChange = $identity->must_change_password;
-            $destination = $requiresPasswordChange ? '/owner/change-password' : ($role === 'customer' ? '/dashboard' : '/owner');
+            $destination = $requiresPasswordChange ? '/owner/change-password' : (in_array($role, ['customer', 'staff'], true) ? '/dashboard' : '/owner');
         }
 
         Auth::guard('platform_admin')->logout();
@@ -73,6 +74,11 @@ class UnifiedAuthController extends Controller
 
         $response = response()->json(['data' => [
             'role' => $role,
+            'permissions' => $identity instanceof PlatformAdmin
+                ? ($identity->permissions ?? [])
+                : ($identity->role === 'staff'
+                    ? app(StaffPermissionService::class)->permissionsFor($identity)
+                    : ($identity->permissions ?: $identity->roleRecord?->permissions ?: [])),
             'requires_password_change' => $requiresPasswordChange,
             'redirect_to' => $destination,
             'profile' => $identity instanceof PlatformAdmin
@@ -94,10 +100,10 @@ class UnifiedAuthController extends Controller
     {
         $identity = $request->user();
         if ($identity instanceof PlatformAdmin) {
-            return response()->json(['data' => ['role' => 'platform-admin', 'requires_password_change' => false, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email, 'is_active' => $identity->is_active]]]);
+            return response()->json(['data' => ['role' => 'platform-admin', 'permissions' => $identity->permissions ?? [], 'requires_password_change' => false, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email, 'is_active' => $identity->is_active]]]);
         }
         if ($identity instanceof User) {
-            return response()->json(['data' => ['role' => $identity->role ?: 'business-owner', 'requires_password_change' => $identity->must_change_password, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email]]]);
+            return response()->json(['data' => ['role' => $identity->role ?: 'business-owner', 'permissions' => $identity->role === 'staff' ? app(StaffPermissionService::class)->permissionsFor($identity) : ($identity->permissions ?: $identity->roleRecord?->permissions ?: []), 'requires_password_change' => $identity->must_change_password, 'profile' => ['id' => $identity->id, 'name' => $identity->name, 'username' => $identity->username, 'email' => $identity->email]]]);
         }
 
         return response()->json(['message' => 'Unauthenticated.'], 401);

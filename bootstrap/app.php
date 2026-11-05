@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureOwnerPasswordChanged;
 use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\EnsureStaffPermission;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'platform.admin' => EnsurePlatformAdmin::class,
             'owner.password.changed' => EnsureOwnerPasswordChanged::class,
             'api.token' => AuthenticateApiToken::class,
+            'staff.permission' => EnsureStaffPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

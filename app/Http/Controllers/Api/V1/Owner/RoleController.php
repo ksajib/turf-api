@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api\V1\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Services\StaffPermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class RoleController extends Controller
 {
-    private const MODULES = ['dashboard', 'turfs', 'bookings', 'customers', 'payments', 'staff', 'reports', 'subscription', 'settings'];
-    private const ACTIONS = ['view', 'edit', 'update', 'delete'];
+    private const MODULES = ['dashboard', 'turf', 'bookings', 'customers', 'payments', 'staff', 'reports', 'subscriptions', 'business'];
+    private const ACTIONS = ['view', 'create', 'edit', 'delete'];
+
+    public function __construct(private readonly StaffPermissionService $permissions) {}
 
     private function businessId(Request $request): string
     {
@@ -41,7 +44,7 @@ class RoleController extends Controller
             'id' => $role->id,
             'name' => $role->name,
             'business_id' => $role->business_id,
-            'permissions' => array_values(array_intersect($role->permissions ?? [], $this->permissionKeys())),
+            'permissions' => array_values(array_intersect($this->permissions->normalize($role->permissions ?? []), $this->permissionKeys())),
             'status' => $role->status,
             'members_count' => (int) ($role->users_count ?? 0),
             'can_manage' => (string) $role->business_id !== '',
@@ -75,7 +78,7 @@ class RoleController extends Controller
     {
         $businessId = $this->businessId($request);
         $data = $request->validate($this->rules());
-        $role = Role::create(['business_id' => $businessId, 'name' => trim($data['name']), 'permissions' => array_values(array_unique($data['permissions'])), 'status' => $data['status'] ?? 'active']);
+        $role = Role::create(['business_id' => $businessId, 'name' => trim($data['name']), 'permissions' => $this->permissions->normalize($data['permissions']), 'status' => $data['status'] ?? 'active']);
         return response()->json(['data' => $this->present($role), 'message' => 'Role created successfully.'], 201);
     }
 
@@ -85,7 +88,7 @@ class RoleController extends Controller
         abort_unless((string) $role->business_id === $businessId, 404, 'Role not found.');
         $data = $request->validate($this->rules(true));
         if (array_key_exists('name', $data)) $role->name = trim($data['name']);
-        if (array_key_exists('permissions', $data)) $role->permissions = array_values(array_unique($data['permissions']));
+        if (array_key_exists('permissions', $data)) $role->permissions = $this->permissions->normalize($data['permissions']);
         if (array_key_exists('status', $data)) $role->status = $data['status'];
         $role->save();
         return response()->json(['data' => $this->present($role->loadCount('users')), 'message' => 'Role updated successfully.']);
@@ -99,7 +102,7 @@ class RoleController extends Controller
         $name = $base;
         $suffix = 2;
         while (Role::where('business_id', $businessId)->where('name', $name)->exists()) $name = $base.' '.$suffix++;
-        $copy = Role::create(['business_id' => $businessId, 'name' => $name, 'permissions' => $role->permissions ?? [], 'status' => 'active']);
+        $copy = Role::create(['business_id' => $businessId, 'name' => $name, 'permissions' => $this->permissions->normalize($role->permissions ?? []), 'status' => 'active']);
         return response()->json(['data' => $this->present($copy), 'message' => 'Role duplicated successfully.'], 201);
     }
 

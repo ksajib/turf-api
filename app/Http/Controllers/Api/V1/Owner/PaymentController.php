@@ -17,7 +17,7 @@ class PaymentController extends Controller
     {
         $user = $request->user();
         abort_unless($user instanceof User, 403, 'Owner authentication required.');
-        abort_unless($user->role === 'business-owner' || $user->hasPermission('payments.view') || $user->hasPermission('payments.manage'), 403, 'You do not have permission to view payments.');
+        abort_unless($user->role === 'business-owner' || $user->hasPermission('payments.view') || $user->hasPermission('payments.edit'), 403, 'You do not have permission to view payments.');
         return $user;
     }
 

@@ -55,6 +55,10 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
+        if ($this->role === 'staff') {
+            return app(\App\Services\StaffPermissionService::class)->allows($this, $permission);
+        }
+
         $permissions = $this->permissions ?: $this->roleRecord?->permissions ?: [];
         if (! is_array($permissions)) return false;
         if (in_array($permission, $permissions, true) || in_array(strtok($permission, '.'), $permissions, true)) return true;
@@ -83,5 +87,10 @@ class User extends Authenticatable
     public function customerProfile()
     {
         return $this->hasOne(Customer::class);
+    }
+
+    public function staffProfile()
+    {
+        return $this->hasOne(Staff::class);
     }
 }

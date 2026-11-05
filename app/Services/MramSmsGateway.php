@@ -11,8 +11,6 @@ use Illuminate\Support\Str;
 
 class MramSmsGateway implements SmsGateway
 {
-    private const TRUSTED_HOST = 'msg.mram.com.bd';
-
     private const VALID_MODES = ['test', 'live'];
 
     private const DOCUMENTED_NUMERIC_RESPONSES = [
@@ -91,10 +89,11 @@ class MramSmsGateway implements SmsGateway
             return null;
         }
         $parts = parse_url($baseUrl);
+        $trustedHosts = array_values(array_filter(array_map('trim', (array) ($config['trusted_hosts'] ?? []))));
         if (
             $parts === false
             || ($parts['scheme'] ?? null) !== 'https'
-            || ($parts['host'] ?? null) !== self::TRUSTED_HOST
+            || ($trustedHosts !== [] && ! in_array($parts['host'] ?? null, $trustedHosts, true))
             || isset($parts['user'])
             || isset($parts['pass'])
             || isset($parts['port'])

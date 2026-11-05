@@ -37,7 +37,7 @@ class CustomerController extends Controller
 
     public function store(Request $request, UserProvisioningService $provisioning)
     {
-        $this->authorize($request, 'customers.manage');
+        $this->authorize($request, 'customers.create');
         $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:160'], 'phone' => ['required', 'string', 'max:40'], 'email' => ['nullable', 'email', 'max:255']]);
         $base = Str::of($data['name'])->lower()->replaceMatches('/[^a-z0-9]+/', '.')->trim('.')->substr(0, 38)->toString() ?: 'customer';
         $username = $base;

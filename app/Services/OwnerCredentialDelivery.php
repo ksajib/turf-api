@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Crypt;
 
 class OwnerCredentialDelivery
 {
-    public function queue(User $owner, Business $business, string $temporaryPassword, string $credentialGeneration): void
+    public function queue(User $owner, Business $business, string $temporaryPassword, string $credentialGeneration, array $channels = [CredentialDelivery::CHANNEL_EMAIL, CredentialDelivery::CHANNEL_SMS]): void
     {
         $expiresAt = $owner->temporary_password_expires_at?->toISOString() ?? now()->addDay()->toISOString();
         $payload = Crypt::encryptString(json_encode([
@@ -24,7 +24,7 @@ class OwnerCredentialDelivery
             'credential_generation' => $credentialGeneration,
         ], JSON_THROW_ON_ERROR));
 
-        foreach ([CredentialDelivery::CHANNEL_EMAIL => $owner->email, CredentialDelivery::CHANNEL_SMS => $owner->phone] as $channel => $destination) {
+        foreach (array_intersect_key([CredentialDelivery::CHANNEL_EMAIL => $owner->email, CredentialDelivery::CHANNEL_SMS => $owner->phone], array_flip($channels)) as $channel => $destination) {
             $delivery = CredentialDelivery::create([
                 'user_id' => $owner->id,
                 'business_id' => $business->id,

@@ -27,13 +27,13 @@ class TurfController extends Controller
     private function canView(Request $request): void
     {
         $user = $request->user();
-        abort_unless($user && ($user->role === 'business-owner' || $user->hasPermission('turf.view') || $user->hasPermission('turf.manage')), 403, 'You do not have permission to view turfs.');
+        abort_unless($user && ($user->role === 'business-owner' || $user->hasPermission('turf.view') || $user->hasPermission('turf.edit')), 403, 'You do not have permission to view turfs.');
     }
 
-    private function canManage(Request $request): void
+    private function canManage(Request $request, string $permission): void
     {
         $user = $request->user();
-        abort_unless($user && ($user->role === 'business-owner' || $user->hasPermission('turf.manage')), 403, 'You do not have permission to manage turfs.');
+        abort_unless($user && ($user->role === 'business-owner' || $user->hasPermission($permission)), 403, 'You do not have permission to manage turfs.');
     }
 
     private function rules(bool $partial = false): array
@@ -77,7 +77,7 @@ class TurfController extends Controller
 
     public function store(Request $request)
     {
-        $this->canManage($request);
+        $this->canManage($request, 'turf.create');
         if (is_string($request->input('closed_days'))) $request->merge(['closed_days' => json_decode($request->input('closed_days'), true) ?: []]);
         $data = $request->validate($this->rules());
         $data['business_id'] = $this->businessId($request);
@@ -98,7 +98,7 @@ class TurfController extends Controller
 
     public function update(Request $request, Turf $turf)
     {
-        $this->canManage($request);
+        $this->canManage($request, 'turf.edit');
         abort_unless(in_array($turf->business_id, $this->businessIds($request), true), 404, 'Turf not found.');
         if (is_string($request->input('closed_days'))) $request->merge(['closed_days' => json_decode($request->input('closed_days'), true) ?: []]);
         $data = $request->validate($this->rules(true));
@@ -113,7 +113,7 @@ class TurfController extends Controller
 
     public function status(Request $request, Turf $turf)
     {
-        $this->canManage($request);
+        $this->canManage($request, 'turf.edit');
         abort_unless(in_array($turf->business_id, $this->businessIds($request), true), 404, 'Turf not found.');
         $data = $request->validate(['status' => ['required', Rule::in(['available', 'maintenance', 'closed'])], 'status_reason' => ['nullable', 'string', 'max:255']]);
         $turf->update($data);
@@ -122,7 +122,7 @@ class TurfController extends Controller
 
     public function destroy(Request $request, Turf $turf)
     {
-        $this->canManage($request);
+        $this->canManage($request, 'turf.delete');
         abort_unless(in_array($turf->business_id, $this->businessIds($request), true), 404, 'Turf not found.');
         $turf->delete();
         return response()->json(['message' => 'Turf deleted successfully.']);

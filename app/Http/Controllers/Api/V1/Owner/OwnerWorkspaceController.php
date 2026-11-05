@@ -24,15 +24,40 @@ class OwnerWorkspaceController extends Controller
         $user = $this->user($request);
         $business = $this->business($user);
         $subscription = $business->activeSubscription?->load('planVersion');
+        $today = now()->toDateString();
+        $bookingQuery = Booking::query()->where('business_id', $business->id);
+        $upcomingBookings = (clone $bookingQuery)
+            ->with(['turf:id,name', 'customer:id,user_id', 'customer.user:id,name'])
+            ->whereDate('booking_date', '>=', $today)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->orderBy('booking_date')
+            ->orderBy('start_time')
+            ->limit(5)
+            ->get()
+            ->map(fn (Booking $booking) => [
+                'id' => $booking->id,
+                'booking_number' => $booking->booking_number,
+                'booking_date' => $booking->booking_date?->format('Y-m-d'),
+                'start_time' => $booking->start_time,
+                'end_time' => $booking->end_time,
+                'price_taka' => $booking->price_taka,
+                'status' => $booking->status,
+                'turf' => $booking->turf?->name,
+                'customer' => $booking->customer?->user?->name,
+            ])
+            ->values();
         return response()->json(['data' => [
             'business' => $this->workspace($user, $business),
             'metrics' => [
                 'staff_count' => User::query()->where('business_id', $business->id)->where('role', '!=', 'business-owner')->where('status', 'active')->count(),
                 'turf_count' => Turf::query()->where('business_id', $business->id)->count(),
-                'booking_count' => Booking::query()->where('business_id', $business->id)->count(),
-                'revenue_taka' => Booking::query()->where('business_id', $business->id)->whereIn('status', ['confirmed', 'completed'])->sum('price_taka'),
-                'pending_payments' => Booking::query()->where('business_id', $business->id)->whereIn('payment_status', ['unpaid', 'pending'])->count(),
+                'booking_count' => (clone $bookingQuery)->count(),
+                'today_booking_count' => (clone $bookingQuery)->whereDate('booking_date', $today)->whereNotIn('status', ['rejected', 'cancelled'])->count(),
+                'revenue_taka' => (clone $bookingQuery)->whereIn('status', ['confirmed', 'completed'])->sum('price_taka'),
+                'pending_payments' => (clone $bookingQuery)->whereIn('payment_status', ['unpaid', 'pending'])->count(),
+                'available_turf_count' => Turf::query()->where('business_id', $business->id)->where('status', 'available')->count(),
             ],
+            'upcoming_bookings' => $upcomingBookings,
             'subscription' => $subscription ? [
                 'id' => $subscription->id,
                 'status' => $subscription->status,

@@ -36,7 +36,8 @@ return [
     ],
 
     'mram_sms' => [
-        'base_url' => env('MRAM_SMS_BASE_URL', 'https://msg.mram.com.bd'),
+        'base_url' => env('MRAM_SMS_BASE_URL'),
+        'trusted_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env('MRAM_SMS_TRUSTED_HOSTS', ''))))),
         'enabled' => filter_var(env('MRAM_SMS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'response_diagnostics' => filter_var(env('MRAM_SMS_RESPONSE_DIAGNOSTICS', false), FILTER_VALIDATE_BOOLEAN),
         'mode' => env('MRAM_SMS_MODE', env('APP_ENV') === 'production' ? null : 'test'),

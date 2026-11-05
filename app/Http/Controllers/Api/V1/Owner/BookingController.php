@@ -24,14 +24,14 @@ class BookingController extends Controller
     {
         $user = $request->user();
         abort_unless($user instanceof User, 403, 'Owner authentication required.');
-        abort_unless($user->role === 'business-owner' || $user->hasPermission('bookings.view') || $user->hasPermission('bookings.manage'), 403, 'You do not have permission to manage bookings.');
+        abort_unless($user->role === 'business-owner' || $user->hasPermission('bookings.view') || $user->hasPermission('bookings.edit'), 403, 'You do not have permission to manage bookings.');
         return $user;
     }
 
-    private function manage(Request $request): User
+    private function manage(Request $request, string $permission = 'bookings.edit'): User
     {
         $user = $this->user($request);
-        abort_unless($user->role === 'business-owner' || $user->hasPermission('bookings.manage'), 403, 'You do not have permission to manage bookings.');
+        abort_unless($user->role === 'business-owner' || $user->hasPermission($permission), 403, 'You do not have permission to manage bookings.');
         return $user;
     }
 
@@ -164,7 +164,7 @@ class BookingController extends Controller
 
     public function store(Request $request)
     {
-        $user = $this->manage($request);
+        $user = $this->manage($request, 'bookings.create');
         $data = $request->validate($this->rules());
         $businessId = $this->scope->primary($user);
         $booking = DB::transaction(function () use ($data, $businessId, $user): Booking {
@@ -214,7 +214,7 @@ class BookingController extends Controller
 
     public function payment(Request $request, Booking $booking)
     {
-        $user = $this->manage($request);
+        $user = $this->manage($request, 'payments.create');
         abort_unless(in_array($booking->business_id, $this->scope->ids($user), true), 404, 'Booking not found.');
         $data = $request->validate([
             'amount_received_taka' => ['required', 'integer', 'min:0'],
