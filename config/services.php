@@ -53,4 +53,14 @@ return [
         ],
     ],
 
+    'sslcommerz' => [
+        'store_id' => env('SSLCOMMERZ_STORE_ID'),
+        'store_password' => env('SSLCOMMERZ_STORE_PASSWORD'),
+        'mode' => env('SSLCOMMERZ_MODE', 'sandbox'),
+        'initiation_url' => env('SSLCOMMERZ_INITIATION_URL', env('SSLCOMMERZ_MODE', 'sandbox') === 'live' ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php' : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php'),
+        'validation_url' => env('SSLCOMMERZ_VALIDATION_URL', env('SSLCOMMERZ_MODE', 'sandbox') === 'live' ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php' : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php'),
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+        'callback_url' => env('SSLCOMMERZ_CALLBACK_URL', env('APP_URL', 'http://localhost:8000').'/api/v1/customer/payments/sslcommerz'),
+    ],
+
 ];

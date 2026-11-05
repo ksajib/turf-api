@@ -17,6 +17,9 @@ use App\Http\Controllers\Api\V1\Owner\ReportController;
 use App\Http\Controllers\Api\V1\Owner\SubscriptionController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Customer\DashboardController as CustomerDashboardController;
+use App\Http\Controllers\Api\V1\Customer\TurfController as CustomerTurfController;
+use App\Http\Controllers\Api\V1\Customer\PaymentController as CustomerPaymentController;
+use App\Http\Controllers\Api\V1\Customer\BookingController as CustomerBookingController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use Illuminate\Support\Facades\Route;
@@ -93,6 +96,22 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
 Route::prefix('v1/customer')->group(function () {
     Route::post('register', [CustomerAuthController::class, 'register']);
     Route::get('dashboard/overview', [CustomerDashboardController::class, 'overview'])->middleware('api.token');
+    Route::get('turfs', [CustomerTurfController::class, 'index'])->middleware('api.token');
+    Route::get('turfs/slots', [CustomerTurfController::class, 'slots'])->middleware('api.token');
+    Route::post('bookings', [CustomerTurfController::class, 'storeBooking'])->middleware('api.token');
+    Route::get('payments', [CustomerBookingController::class, 'payments'])->middleware('api.token');
+    Route::get('bookings', [CustomerBookingController::class, 'index'])->middleware('api.token');
+    Route::get('bookings/{booking}', [CustomerBookingController::class, 'show'])->middleware('api.token');
+    Route::patch('bookings/{booking}/cancel', [CustomerBookingController::class, 'cancel'])->middleware('api.token');
+    Route::patch('bookings/{booking}/reschedule', [CustomerBookingController::class, 'reschedule'])->middleware('api.token');
+    Route::post('bookings/{booking}/payment', [CustomerBookingController::class, 'payment'])->middleware('api.token');
+});
+
+Route::prefix('v1/customer/payments/sslcommerz')->group(function () {
+    Route::match(['get', 'post'], 'success', [CustomerPaymentController::class, 'success']);
+    Route::match(['get', 'post'], 'fail', [CustomerPaymentController::class, 'fail']);
+    Route::match(['get', 'post'], 'cancel', [CustomerPaymentController::class, 'cancel']);
+    Route::post('ipn', [CustomerPaymentController::class, 'ipn']);
 });
 
 Route::prefix('v1/admin/auth')->group(function () {
