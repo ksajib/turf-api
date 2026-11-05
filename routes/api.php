@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Owner\StaffController;
 use App\Http\Controllers\Api\V1\Owner\ReportController;
 use App\Http\Controllers\Api\V1\Owner\SubscriptionController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
+use App\Http\Controllers\Api\V1\Customer\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use Illuminate\Support\Facades\Route;
@@ -91,6 +92,7 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
 
 Route::prefix('v1/customer')->group(function () {
     Route::post('register', [CustomerAuthController::class, 'register']);
+    Route::get('dashboard/overview', [CustomerDashboardController::class, 'overview'])->middleware('api.token');
 });
 
 Route::prefix('v1/admin/auth')->group(function () {
