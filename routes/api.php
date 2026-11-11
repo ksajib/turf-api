@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Owner\PayrollShiftController;
 use App\Http\Controllers\Api\V1\Owner\PayrollHolidayController;
 use App\Http\Controllers\Api\V1\Owner\PayrollLeaveTypeController;
 use App\Http\Controllers\Api\V1\Owner\PayrollLeaveApplicationController;
+use App\Http\Controllers\Api\V1\Owner\PayrollSalaryStructureController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Customer\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\Api\V1\Customer\TurfController as CustomerTurfController;
@@ -94,6 +95,10 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::get('reports', [ReportController::class, 'index'])->middleware('staff.permission:reports.view');
     Route::get('subscription', [SubscriptionController::class, 'show']);
     Route::get('payroll/settings', [PayrollSettingsController::class, 'show']);
+    Route::get('payroll/salary-structures', [PayrollSalaryStructureController::class, 'index']);
+    Route::get('payroll/salary-structures/{staffId}', [PayrollSalaryStructureController::class, 'show']);
+    Route::post('payroll/salary-structures', [PayrollSalaryStructureController::class, 'store']);
+    Route::patch('payroll/salary-structures/{salaryStructure}', [PayrollSalaryStructureController::class, 'update']);
     Route::patch('payroll/settings', [PayrollSettingsController::class, 'update']);
     Route::get('payroll/shifts', [PayrollShiftController::class, 'index']);
     Route::post('payroll/shifts', [PayrollShiftController::class, 'store']);
