@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Owner\RoleController;
 use App\Http\Controllers\Api\V1\Owner\StaffController;
 use App\Http\Controllers\Api\V1\Owner\ReportController;
 use App\Http\Controllers\Api\V1\Owner\SubscriptionController;
+use App\Http\Controllers\Api\V1\Owner\PayrollSettingsController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Customer\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\Api\V1\Customer\TurfController as CustomerTurfController;
@@ -88,6 +89,8 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::delete('roles/{role}', [RoleController::class, 'destroy']);
     Route::get('reports', [ReportController::class, 'index'])->middleware('staff.permission:reports.view');
     Route::get('subscription', [SubscriptionController::class, 'show']);
+    Route::get('payroll/settings', [PayrollSettingsController::class, 'show']);
+    Route::patch('payroll/settings', [PayrollSettingsController::class, 'update']);
     Route::post('subscription/pause', [SubscriptionController::class, 'pause']);
     Route::get('subscription/invoices/{payment}/pdf', [SubscriptionController::class, 'downloadInvoice']);
     Route::post('subscription/invoices/{payment}/send', [SubscriptionController::class, 'sendInvoice']);
