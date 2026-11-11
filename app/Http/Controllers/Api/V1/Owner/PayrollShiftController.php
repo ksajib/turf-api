@@ -11,7 +11,7 @@ class PayrollShiftController extends Controller
     public function index(Request $request)
     {
         $businessId = $this->businessId($request, false);
-        $shifts = PayrollShift::query()->where('gym_id', $businessId)->orderBy('name')->get();
+        $shifts = PayrollShift::query()->where('business_id', $businessId)->orderBy('name')->get();
 
         return response()->json(['data' => $shifts]);
     }
@@ -20,7 +20,7 @@ class PayrollShiftController extends Controller
     {
         $businessId = $this->businessId($request);
         $data = $this->validated($request);
-        $data['gym_id'] = $businessId;
+        $data['business_id'] = $businessId;
         $data['created_by'] = $request->user()->id;
         $data['updated_by'] = $request->user()->id;
 
@@ -30,7 +30,7 @@ class PayrollShiftController extends Controller
     public function update(Request $request, string $shift)
     {
         $businessId = $this->businessId($request);
-        $record = PayrollShift::query()->where('gym_id', $businessId)->whereKey($shift)->firstOrFail();
+        $record = PayrollShift::query()->where('business_id', $businessId)->whereKey($shift)->firstOrFail();
         $record->fill($this->validated($request));
         $record->updated_by = $request->user()->id;
         $record->save();
@@ -41,7 +41,7 @@ class PayrollShiftController extends Controller
     public function destroy(Request $request, string $shift)
     {
         $businessId = $this->businessId($request);
-        $record = PayrollShift::query()->where('gym_id', $businessId)->whereKey($shift)->firstOrFail();
+        $record = PayrollShift::query()->where('business_id', $businessId)->whereKey($shift)->firstOrFail();
         $record->delete();
 
         return response()->json(['message' => 'Shift deleted successfully.']);

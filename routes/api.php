@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Owner\ReportController;
 use App\Http\Controllers\Api\V1\Owner\SubscriptionController;
 use App\Http\Controllers\Api\V1\Owner\PayrollSettingsController;
 use App\Http\Controllers\Api\V1\Owner\PayrollShiftController;
+use App\Http\Controllers\Api\V1\Owner\PayrollHolidayController;
 use App\Http\Controllers\Api\V1\Customer\AuthController as CustomerAuthController;
 use App\Http\Controllers\Api\V1\Customer\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\Api\V1\Customer\TurfController as CustomerTurfController;
@@ -96,6 +97,10 @@ Route::prefix('v1/owner')->middleware(['api.token', 'owner.password.changed'])->
     Route::post('payroll/shifts', [PayrollShiftController::class, 'store']);
     Route::patch('payroll/shifts/{shift}', [PayrollShiftController::class, 'update']);
     Route::delete('payroll/shifts/{shift}', [PayrollShiftController::class, 'destroy']);
+    Route::get('payroll/holidays', [PayrollHolidayController::class, 'index']);
+    Route::post('payroll/holidays', [PayrollHolidayController::class, 'store']);
+    Route::patch('payroll/holidays/{holiday}', [PayrollHolidayController::class, 'update']);
+    Route::delete('payroll/holidays/{holiday}', [PayrollHolidayController::class, 'destroy']);
     Route::post('subscription/pause', [SubscriptionController::class, 'pause']);
     Route::get('subscription/invoices/{payment}/pdf', [SubscriptionController::class, 'downloadInvoice']);
     Route::post('subscription/invoices/{payment}/send', [SubscriptionController::class, 'sendInvoice']);

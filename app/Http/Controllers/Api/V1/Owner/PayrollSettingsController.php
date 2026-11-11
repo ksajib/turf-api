@@ -13,7 +13,7 @@ class PayrollSettingsController extends Controller
     {
         $businessId = $this->businessId($request);
         $setting = PayrollSetting::query()->firstOrCreate(
-            ['gym_id' => $businessId],
+            ['business_id' => $businessId],
             ['created_by' => $request->user()->id]
         );
 
@@ -42,7 +42,7 @@ class PayrollSettingsController extends Controller
             'salary_pay_day' => ['sometimes', 'integer', 'min:1', 'max:31'],
         ])->validate();
 
-        $setting = PayrollSetting::query()->firstOrNew(['gym_id' => $businessId]);
+        $setting = PayrollSetting::query()->firstOrNew(['business_id' => $businessId]);
         if (! $setting->exists) {
             $data['created_by'] = $request->user()->id;
         }

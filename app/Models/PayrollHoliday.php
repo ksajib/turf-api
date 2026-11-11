@@ -10,9 +10,9 @@ class PayrollHoliday extends Model
     use HasUlids;
 
     protected $table = 'payroll_holidays';
-    protected $fillable = ['gym_id', 'holiday_date', 'title', 'created_by'];
+    protected $fillable = ['business_id', 'from_date', 'to_date', 'title', 'created_by'];
 
-    protected function casts(): array { return ['holiday_date' => 'date:Y-m-d']; }
-    public function business() { return $this->belongsTo(Business::class, 'gym_id'); }
+    protected function casts(): array { return ['from_date' => 'date:Y-m-d', 'to_date' => 'date:Y-m-d']; }
+    public function business() { return $this->belongsTo(Business::class, 'business_id'); }
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
 }
