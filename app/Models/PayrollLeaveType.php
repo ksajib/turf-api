@@ -12,7 +12,7 @@ class PayrollLeaveType extends Model
     protected $table = 'payroll_leave_types';
     protected $fillable = ['business_id', 'name', 'days_per_year', 'is_paid', 'is_active', 'created_by', 'updated_by'];
 
-    protected function casts(): array { return ['days_per_year' => 'decimal:1', 'is_paid' => 'boolean', 'is_active' => 'boolean']; }
+    protected function casts(): array { return ['days_per_year' => 'integer', 'is_paid' => 'boolean', 'is_active' => 'boolean']; }
     public function business() { return $this->belongsTo(Business::class, 'business_id'); }
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
     public function updatedBy() { return $this->belongsTo(User::class, 'updated_by'); }
